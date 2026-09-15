@@ -19,7 +19,7 @@ npm start
 Configure these in the server runtime environment, not source, URLs, or shell history:
 
 - `CAPI_PREVIEW_PASSWORD`: required, at least 16 characters; use a randomly generated strong password. No default exists.
-- `CAPI_PREVIEW_ORIGIN`: required exact external HTTPS origin, for example `https://your-assigned-preview-host`. No path or trailing slash. Configure the actual Capy HTTPS preview origin before use; the server never derives trust from Host or forwarded headers.
+- `CAPI_PREVIEW_ORIGIN`: required exact external HTTPS origin, for example `https://your-assigned-preview-host`. No path or trailing slash. This is the fallback allowlist for clients without Fetch Metadata headers. Modern browsers use their own same-origin metadata, so changing the preview hostname does not break login. The server never derives trust from Host or forwarded headers.
 - `CAPY_API_KEY`: optional CLI credential, passed only to the local PTY. Otherwise the CLI offers onboarding. The preview password and other server environment variables are not passed to the PTY.
 - `CAPI_PREVIEW_LOCAL_TEST=1`: explicit local test mode only. Requires an HTTP localhost or 127.0.0.1 origin, binds only 127.0.0.1, and omits Secure from the cookie. Never use this mode on an exposed preview.
 

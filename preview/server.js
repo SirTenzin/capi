@@ -31,6 +31,9 @@ export function createPreview({
 	const wss = new WebSocketServer({ noServer: true, maxPayload: 8192, perMessageDeflate: false });
 	let session;
 	let attempts = [];
+	const sameOrigin = (req) =>
+		req.headers["sec-fetch-site"] === "same-origin" ||
+		(req.headers["sec-fetch-site"] === undefined && req.headers.origin === origin);
 	const cookie = (token, age) =>
 		`${cookieName}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${age}${insecureLocal ? "" : "; Secure"}`;
 	const revoke = () => {
@@ -66,7 +69,7 @@ export function createPreview({
 			res.end(text);
 		};
 		if (req.method === "POST" && ["/login", "/logout"].includes(req.url)) {
-			if (req.headers.origin !== origin) return reply(403, "Forbidden");
+			if (!sameOrigin(req)) return reply(403, "Forbidden");
 			if (req.url === "/logout") {
 				if (!authenticated(req)) return reply(401, "Unauthorized");
 				revoke();
@@ -126,7 +129,7 @@ export function createPreview({
 	server.headersTimeout = 10_000;
 	server.maxConnections = 32;
 	server.on("upgrade", (req, socket, head) => {
-		if (req.url !== "/ws" || req.headers.origin !== origin || !authenticated(req) || session.used) {
+		if (req.url !== "/ws" || !sameOrigin(req) || !authenticated(req) || session.used) {
 			socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
 			return;
 		}

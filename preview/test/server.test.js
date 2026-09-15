@@ -84,6 +84,28 @@ test("unauthorized terminal and websocket fail without spawning", async (t) => {
 	assert.equal(f.calls.length, 0);
 });
 
+test("browser same-origin metadata avoids hostname pinning without allowing cross-site access", async (t) => {
+	const f = await fixture(t);
+	for (const site of ["cross-site", "same-site", "none"]) {
+		const response = await f.request("/login", {
+			method: "POST",
+			headers: { Origin: origin, "Sec-Fetch-Site": site, "Content-Type": "application/json" },
+			body: JSON.stringify({ password }),
+		});
+		assert.equal(response.status, 403);
+	}
+	const response = await f.request("/login", {
+		method: "POST",
+		headers: {
+			Origin: "https://new-preview.example.test",
+			"Sec-Fetch-Site": "same-origin",
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({ password }),
+	});
+	assert.equal(response.status, 200);
+});
+
 test("origin is exact and ignores forwarded headers; login is globally rate limited", async (t) => {
 	const f = await fixture(t);
 	assert.equal((await f.login(password, "https://evil.test")).status, 403);

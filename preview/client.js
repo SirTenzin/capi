@@ -63,7 +63,13 @@ login.addEventListener("submit", async (event) => {
 		if (response.ok) connect();
 		else
 			status.textContent =
-				response.status === 429 ? "Too many attempts. Wait one minute." : "Sign-in failed.";
+				response.status === 429
+					? "Too many attempts. Wait one minute."
+					: response.status === 401
+						? "Password not accepted. Use the latest preview password."
+						: response.status === 403
+							? "Browser access was rejected. Open the preview in its own tab."
+							: "Sign-in unavailable.";
 	} catch {
 		password.value = "";
 		status.textContent = "Sign-in unavailable.";
