@@ -7,7 +7,7 @@ import { WebSocketServer } from "ws";
 
 const cwd = fileURLToPath(new URL("../", import.meta.url));
 const cookieName = "capi_preview";
-const page = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Capi private preview</title><link rel="stylesheet" href="/client.css"></head><body><header><strong>Capi private preview</strong><button id="logout" hidden>Log out</button></header><main><form id="login"><label>Preview password<input id="password" type="password" autocomplete="current-password" required maxlength="1024"></label><button>Open terminal</button></form><p id="status" role="status">Private access only. Terminal input can control the cloud agent.</p><div id="terminal"></div></main><script src="/client.js" defer></script></body></html>`;
+const page = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Capi private preview</title><link rel="stylesheet" href="/client.css"></head><body><header><strong>Capi private preview</strong><button id="logout" hidden>Log out</button></header><main><form id="login"><label>Preview password<input id="password" type="password" autocomplete="current-password" required maxlength="1024"></label><button disabled>Open terminal</button></form><p id="status" role="status">Checking session…</p><a id="open-tab" href="/" target="_blank" rel="noopener" hidden>Open preview in its own tab</a><div id="terminal"></div></main><script src="/client.js" defer></script></body></html>`;
 
 export function createPreview({
 	password,
@@ -36,18 +36,23 @@ export function createPreview({
 		(req.headers["sec-fetch-site"] === undefined && req.headers.origin === origin);
 	const cookie = (token, age) =>
 		`${cookieName}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${age}${insecureLocal ? "" : "; Secure"}`;
-	const revoke = () => {
+	const revoke = (code = 4000, reason = "Session ended") => {
 		if (!session) return;
 		const old = session;
 		session = undefined;
 		clearTimeout(old.timer);
-		old.socket?.terminate();
+		if (old.socket) {
+			old.socket.close(code, reason);
+			const timeout = setTimeout(() => old.socket.terminate(), 1000);
+			timeout.unref();
+			old.socket.once("close", () => clearTimeout(timeout));
+		}
 		try {
 			old.process?.kill();
 		} catch {}
 	};
 	const authenticated = (req) => {
-		if (session && Date.now() >= session.expires) revoke();
+		if (session && Date.now() >= session.expires) revoke(4001, "Session expired");
 		const token = req.headers.cookie
 			?.split(";")
 			.map((part) => part.trim())
@@ -72,7 +77,7 @@ export function createPreview({
 			if (!sameOrigin(req)) return reply(403, "Forbidden");
 			if (req.url === "/logout") {
 				if (!authenticated(req)) return reply(401, "Unauthorized");
-				revoke();
+				revoke(4002, "Logged out");
 				res.setHeader("Set-Cookie", cookie("", 0));
 				return reply(200, "Logged out");
 			}
@@ -99,9 +104,9 @@ export function createPreview({
 			} catch {
 				return reply(400, "Invalid request");
 			}
-			revoke();
+			revoke(4003, "Signed in elsewhere");
 			session = { token: randomBytes(32).toString("hex"), expires: Date.now() + sessionMs, used: false };
-			session.timer = setTimeout(revoke, sessionMs);
+			session.timer = setTimeout(() => revoke(4001, "Session expired"), sessionMs);
 			session.timer.unref();
 			res.setHeader("Set-Cookie", cookie(session.token, Math.ceil(sessionMs / 1000)));
 			return reply(200, "Authenticated");
@@ -149,7 +154,7 @@ export function createPreview({
 					env,
 				});
 			} catch {
-				revoke();
+				revoke(4004, "Terminal could not start");
 				return;
 			}
 			let bytes = 0;
@@ -159,16 +164,16 @@ export function createPreview({
 				if (ws.readyState !== 1) return;
 				pendingOutput += Buffer.byteLength(data);
 				if (pendingOutput > 1024 * 1024 || ws.bufferedAmount > 1024 * 1024) {
-					revoke();
+					revoke(4005, "Terminal output limit exceeded");
 					return;
 				}
 				ws.send(data);
 			});
 			active.process.onExit(() => {
-				if (session === active) revoke();
+				if (session === active) revoke(4006, "Terminal process exited");
 			});
 			ws.on("error", () => {
-				if (session === active) revoke();
+				if (session === active) revoke(4007, "Terminal transport error");
 			});
 			ws.on("close", () => {
 				if (session === active) revoke();
@@ -181,7 +186,7 @@ export function createPreview({
 				}
 				bytes += data.length;
 				if (binary || bytes > 65536) {
-					revoke();
+					revoke(4008, "Terminal input limit exceeded");
 					return;
 				}
 				try {
@@ -205,9 +210,9 @@ export function createPreview({
 						message.rows <= 100
 					)
 						active.process.resize(message.cols, message.rows);
-					else revoke();
+					else revoke(4009, "Invalid terminal message");
 				} catch {
-					revoke();
+					revoke(4009, "Invalid terminal message");
 				}
 			});
 		});

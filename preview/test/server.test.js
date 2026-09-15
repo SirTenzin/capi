@@ -250,3 +250,44 @@ test("local cookie mode is explicit and security headers cover public landing", 
 	assert.equal(landing.headers.get("cache-control"), "no-store");
 	assert.equal(landing.headers.get("x-content-type-options"), "nosniff");
 });
+
+for (const [action, code, reason] of [
+	["exit", 4006, "Terminal process exited"],
+	["invalid", 4009, "Invalid terminal message"],
+	["output", 4005, "Terminal output limit exceeded"],
+	["rotate", 4003, "Signed in elsewhere"],
+]) {
+	test(`${action} reports a fixed safe close reason and revokes authentication`, async (t) => {
+		const f = await fixture(t);
+		const cookie = (await f.login()).headers.get("set-cookie");
+		const ws = f.connect(cookie);
+		await once(ws, "open");
+		const closed = once(ws, "close");
+		if (action === "exit") f.child.exit({ exitCode: 1, signal: "private detail" });
+		if (action === "invalid") ws.send(JSON.stringify({ secret: "private detail" }));
+		if (action === "output") f.child.data("private detail".repeat(100_000));
+		if (action === "rotate") await f.login();
+		const [actualCode, actualReason] = await closed;
+		assert.equal(actualCode, code);
+		assert.equal(actualReason.toString(), reason);
+		assert.equal((await f.request("/session", { headers: { Cookie: cookie } })).status, 401);
+	});
+}
+
+test("terminal device responses and boundary resize dimensions keep the session alive", async (t) => {
+	const f = await fixture(t);
+	const cookie = (await f.login()).headers.get("set-cookie");
+	const ws = f.connect(cookie);
+	await once(ws, "open");
+	const response = "\u001b[?1;2c";
+	ws.send(JSON.stringify({ type: "input", data: response }));
+	ws.send(JSON.stringify({ type: "resize", cols: 2, rows: 2 }));
+	ws.send(JSON.stringify({ type: "resize", cols: 300, rows: 100 }));
+	await new Promise((resolve) => setTimeout(resolve, 30));
+	assert.deepEqual(f.child.writes, [response]);
+	assert.equal(f.child.kills, 0);
+	assert.equal((await f.request("/session", { headers: { Cookie: cookie } })).status, 200);
+	const closed = once(ws, "close");
+	ws.close();
+	await closed;
+});
