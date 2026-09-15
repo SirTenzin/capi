@@ -1,18 +1,81 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { visibleWidth } from "@earendil-works/pi-tui";
+import { setKittyProtocolActive, type TUI, visibleWidth } from "@earendil-works/pi-tui";
 import { commandAutocomplete, commands, parseCommand } from "../src/commands.ts";
 import { KeybindingsManager } from "../src/keybindings.ts";
 import { Footer } from "../src/ui/footer.ts";
 import { MaskedInput } from "../src/ui/masked-input.ts";
 import { AssistantMessageComponent } from "../src/ui/pi/components/assistant-message.ts";
+import { CustomEditor } from "../src/ui/pi/components/custom-editor.ts";
 import { UserMessageComponent } from "../src/ui/pi/components/user-message.ts";
-import { initTheme, theme } from "../src/ui/pi/theme/theme.ts";
+import { getEditorTheme, initTheme, theme } from "../src/ui/pi/theme/theme.ts";
 import { safeText } from "../src/ui/safe-text.ts";
 import { Splash } from "../src/ui/splash.ts";
 
 initTheme("dark");
+
+test("Enter steers, AltEnter queues, ShiftEnter and Ctrl+J only insert newlines across Pi encodings", () => {
+	const editor = new CustomEditor({ requestRender() {} } as TUI, getEditorTheme(), new KeybindingsManager());
+	const actions: { delivery: string; text: string }[] = [];
+	editor.onSubmit = (text) => actions.push({ delivery: "steer", text });
+	editor.onQueue = (text) => actions.push({ delivery: "queue", text });
+	try {
+		for (const kitty of [false, true]) {
+			setKittyProtocolActive(kitty);
+			for (const key of [
+				"\u001b[13;2u",
+				"\u001b[57414;2u",
+				"\u001b[27;2;13~",
+				"\u001b[13;2~",
+				"\n",
+				"\u001b[106;5u",
+				...(kitty ? ["\u001b\r"] : []),
+			]) {
+				editor.setText("newline\\");
+				const before = actions.length;
+				editor.handleInput(key);
+				assert.equal(editor.getText(), "newline\\\n", JSON.stringify({ kitty, key }));
+				assert.equal(actions.length, before);
+			}
+			for (const key of [
+				"\u001b[13;3u",
+				"\u001b[57414;3u",
+				"\u001b[27;3;13~",
+				...(!kitty ? ["\u001b\r"] : []),
+			]) {
+				editor.setText("queue");
+				editor.handleInput(key);
+				assert.deepEqual(actions.at(-1), { delivery: "queue", text: "queue" });
+				assert.equal(editor.getText(), "");
+			}
+			for (const key of ["\r", "\u001b[13u", "\u001bOM", "\u001b[57414u"]) {
+				editor.setText("steer\\");
+				editor.handleInput(key);
+				assert.deepEqual(actions.at(-1), { delivery: "steer", text: "steer\\" });
+				assert.equal(editor.getText(), "");
+			}
+		}
+	} finally {
+		setKittyProtocolActive(false);
+	}
+});
+
+test("queue submits expanded paste content and honors disabled submission", () => {
+	const editor = new CustomEditor({ requestRender() {} } as TUI, getEditorTheme(), new KeybindingsManager());
+	let queued = "";
+	editor.onQueue = (text) => {
+		queued = text;
+	};
+	const text = "pasted line\n".repeat(30);
+	editor.handleInput(`\u001b[200~${text}\u001b[201~`);
+	editor.disableSubmit = true;
+	editor.handleInput("\u001b[13;3u");
+	assert.equal(queued, "");
+	editor.disableSubmit = false;
+	editor.handleInput("\u001b[13;3u");
+	assert.equal(queued, text);
+});
 
 test("API key input always renders masked text, including bracketed paste", () => {
 	const input = new MaskedInput();

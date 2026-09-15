@@ -14,7 +14,7 @@ import { KeybindingsManager } from "../keybindings.ts";
 import { Session } from "../session.ts";
 import { type Settings, Storage } from "../storage.ts";
 import { HttpTransport } from "../transport.ts";
-import type { Project, Snapshot } from "../types.ts";
+import type { Delivery, Project, Snapshot } from "../types.ts";
 import { Footer } from "./footer.ts";
 import { MaskedInput } from "./masked-input.ts";
 import { createChatViewport } from "./pi/chat-viewport.ts";
@@ -73,6 +73,9 @@ export class App {
 		this.editor.onCtrlD = () => this.quit();
 		this.editor.onSubmit = (text) => {
 			void this.submit(text);
+		};
+		this.editor.onQueue = (text) => {
+			void this.submit(text, "queue");
 		};
 		const viewport = createChatViewport({
 			document: this.document,
@@ -197,6 +200,9 @@ export class App {
 		this.pending.setText("");
 		this.welcome();
 		this.notice("");
+		const tracked = await this.session.tracked();
+		if (tracked.outbox) this.notice("An uncertain send is saved. Use /queue to recover it.");
+		else if (tracked.messages.length) this.notice("Locally tracked sends are available in /queue.");
 	}
 
 	private renderSnapshot(snapshot: Snapshot, cached: boolean): void {
@@ -238,7 +244,6 @@ export class App {
 			this.indicator = new StatusIndicator(this.tui, `Capy ${snapshot.thread.status}`);
 			this.editor.setWorkingStatusIndicator(this.indicator);
 		}
-		if (!cached) this.pending.setText("");
 		this.notice(`${snapshot.thread.status}${cached ? " • syncing…" : ""}`);
 	}
 
@@ -248,7 +253,7 @@ export class App {
 		this.editor?.setWorkingStatusIndicator(undefined);
 	}
 
-	private async submit(raw: string): Promise<void> {
+	private async submit(raw: string, delivery: Delivery = "steer"): Promise<void> {
 		const text = raw.trim();
 		if (!text || this.ended) return;
 		if (text === "/quit") {
@@ -271,13 +276,13 @@ export class App {
 			if (!this.session) throw new Error("Use /login first.");
 			this.editor.addToHistory(text);
 			this.pending.setText(theme.fg("muted", "Sending to Capy…"));
-			await this.session.send(text);
-			this.pending.setText(theme.fg("muted", "Message accepted • syncing cloud transcript…"));
+			await this.session.send(text, delivery);
 		} catch (error) {
 			this.pending.setText("");
 			if (!this.editor.getText()) this.editor.setText(raw);
 			this.notice(error instanceof Error ? error.message : "Operation failed.");
 		} finally {
+			this.pending.setText("");
 			this.busy = false;
 		}
 		this.tui.requestRender();
@@ -285,6 +290,38 @@ export class App {
 
 	private async command(name: string, argument: string): Promise<void> {
 		switch (name) {
+			case "queue": {
+				if (!this.session) throw new Error("Use /login first.");
+				const { outbox, messages } = await this.session.tracked();
+				const items = messages.map((message, index) => ({
+					label: `${index + 1}. ${message.delivery ?? "legacy default"} · ${message.action ? `${message.action} outcome unknown` : "accepted; queue status unknown"} · ${message.threadId} · ${safeText(message.text).replace(/\s+/g, " ").slice(0, 100)}`,
+					value: message.id,
+				}));
+				if (outbox)
+					items.unshift({
+						label: `Recover uncertain ${outbox.delivery ?? "legacy default"} send · ${outbox.threadId ?? "new thread"} · ${safeText(outbox.text).replace(/\s+/g, " ").slice(0, 100)}`,
+						value: "recover",
+					});
+				if (!items.length) {
+					this.notice("No locally tracked pending sends. This is not the server's queue list.");
+					break;
+				}
+				const id = await this.select("Locally tracked sends", items);
+				if (id === "recover") await this.session.recover();
+				else if (id) {
+					const message = messages.find((message) => message.id === id);
+					const actions = [
+						{ label: "Send now", value: "send-now" as const },
+						{ label: "Cancel message", value: "cancel" as const },
+					].filter((action) => !message?.action || action.value === message.action);
+					const action = await this.select(
+						message?.action ? "Retry uncertain action" : "Message action",
+						actions,
+					);
+					if (action) await this.session.act(id, action);
+				}
+				break;
+			}
 			case "login":
 				await this.login(true);
 				break;
@@ -373,7 +410,8 @@ export class App {
 			}
 			case "hotkeys":
 				await this.select("Keyboard shortcuts", [
-					{ label: "Enter send · Shift+Enter / Ctrl+J newline · Tab command completion", value: "" },
+					{ label: "Enter steer · Alt+Enter queue · Shift+Enter / Ctrl+J newline", value: "" },
+					{ label: "Tab command completion · /queue locally tracked sends", value: "" },
 					{ label: "↑↓ editor history · Ctrl+U clear line · Ctrl+W delete word", value: "" },
 					{ label: "PageUp/PageDown scroll · Home/End transcript top/bottom", value: "" },
 					{ label: "Ctrl+Shift+F search transcript · mouse scroll/select", value: "" },

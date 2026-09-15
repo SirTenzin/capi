@@ -56,10 +56,10 @@ test("create and follow-up sends contain no local history or provider fields", a
 		return Response.json(thread);
 	});
 	await transport.create("project_test", "First", "request_test");
-	await transport.send(thread.id, "Next only", "client_test");
+	await transport.send(thread.id, "Next only", "client_test", undefined, "steer");
 	assert.deepEqual(bodies, [
 		{ projectId: "project_test", message: "First", requestId: "request_test" },
-		{ text: "Next only", clientKey: "client_test" },
+		{ text: "Next only", clientKey: "client_test", delivery: "steer" },
 	]);
 });
 
@@ -67,6 +67,47 @@ test("message IDs dedupe and updates replace cached versions", () => {
 	assert.deepEqual(mergeMessages([message("b"), message("a")], [message("a", "Updated")]), [
 		message("a", "Updated"),
 		message("b"),
+	]);
+});
+
+test("admission receipt, explicit delivery, cancel and send-now follow the public contract", async () => {
+	const calls: { url: string; method?: string; body?: unknown }[] = [];
+	const responses = [
+		{ id: "01ABCDEFGHIJKLMNOPQRSTUVWX", deduped: false },
+		{ outcome: "cancelled" },
+		{ outcome: "sent", id: "01ZYXWVUTSRQPONMLKJIHGFEDC" },
+	];
+	const transport = new HttpTransport("test-key", async (url, options) => {
+		calls.push({
+			url: String(url),
+			method: options?.method,
+			body: options?.body ? JSON.parse(String(options.body)) : undefined,
+		});
+		return Response.json(responses.shift());
+	});
+	const receipt = await transport.send("thread/test", "Later", "client", undefined, "queue");
+	assert.equal(receipt.id, "01ABCDEFGHIJKLMNOPQRSTUVWX");
+	assert.deepEqual(await transport.cancel("thread/test", receipt.id), { outcome: "cancelled" });
+	assert.deepEqual(await transport.sendNow("thread/test", receipt.id), {
+		outcome: "sent",
+		id: "01ZYXWVUTSRQPONMLKJIHGFEDC",
+	});
+	assert.deepEqual(calls, [
+		{
+			url: "https://api.capy.ai/api/v1/threads/thread%2Ftest/message",
+			method: "POST",
+			body: { text: "Later", clientKey: "client", delivery: "queue" },
+		},
+		{
+			url: `https://api.capy.ai/api/v1/threads/thread%2Ftest/messages/${receipt.id}/cancel`,
+			method: "POST",
+			body: undefined,
+		},
+		{
+			url: `https://api.capy.ai/api/v1/threads/thread%2Ftest/messages/${receipt.id}/send-now`,
+			method: "POST",
+			body: undefined,
+		},
 	]);
 });
 

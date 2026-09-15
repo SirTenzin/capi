@@ -1,4 +1,4 @@
-import { Editor, type EditorOptions, type EditorTheme, type TUI, visibleWidth } from "@earendil-works/pi-tui";
+import { Editor, type EditorOptions, type EditorTheme, matchesKey, type TUI, visibleWidth } from "@earendil-works/pi-tui";
 import type { AppKeybinding, KeybindingsManager } from "../../../keybindings.ts";
 import type { StatusIndicator } from "../../status-indicator.ts";
 
@@ -19,6 +19,7 @@ export class CustomEditor extends Editor {
 	// Special handlers that can be dynamically replaced
 	public onEscape?: () => void;
 	public onCtrlD?: () => void;
+	public onQueue?: (text: string) => void;
 	constructor(tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager, options?: CustomEditorOptions) {
 		super(tui, theme, options);
 		this.keybindings = keybindings;
@@ -82,6 +83,26 @@ export class CustomEditor extends Editor {
 	}
 
 	handleInput(data: string): void {
+		if (matchesKey(data, "shift+enter") || matchesKey(data, "ctrl+j") || data === "\n" || data === "\u001b[13;2~") {
+			this.insertTextAtCursor("\n");
+			return;
+		}
+		if (matchesKey(data, "alt+enter")) {
+			if (!this.disableSubmit && this.onQueue) {
+				const text = this.getExpandedText();
+				this.setText("");
+				this.onQueue(text);
+			}
+			return;
+		}
+		if (matchesKey(data, "enter") && !this.isShowingAutocomplete()) {
+			if (!this.disableSubmit) {
+				const text = this.getExpandedText();
+				this.setText("");
+				this.onSubmit?.(text);
+			}
+			return;
+		}
 		// Check app keybindings first
 
 		// Escape/interrupt - only if autocomplete is NOT active

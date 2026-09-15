@@ -12,6 +12,7 @@ export const commands = [
 	["logout", "Remove stored credentials and cache"],
 	["settings", "Change display theme"],
 	["interrupt", "Explicitly interrupt the cloud agent"],
+	["queue", "Manage locally tracked sends and recover uncertain delivery"],
 ] as const;
 
 export function parseCommand(text: string): { name: string; argument: string } | undefined {

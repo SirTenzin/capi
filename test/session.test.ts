@@ -34,6 +34,13 @@ class FakeTransport implements CapyTransport {
 	}
 	async send(threadId: string, text: string, id: string) {
 		this.sends.push({ threadId, text, id });
+		return { id: "01ABCDEFGHIJKLMNOPQRSTUVWX", deduped: false };
+	}
+	async cancel() {
+		return { outcome: "cancelled" as const };
+	}
+	async sendNow() {
+		return { outcome: "sent" as const };
 	}
 	async rename(_id: string, title: string) {
 		return { ...this.value, title };

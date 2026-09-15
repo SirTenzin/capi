@@ -1,4 +1,4 @@
-import type { Message, Page, Project, Snapshot, Thread } from "./types.ts";
+import type { AdmitReceipt, Delivery, Message, Page, Project, Snapshot, Thread } from "./types.ts";
 
 export class ApiError extends Error {
 	constructor(
@@ -43,7 +43,19 @@ export interface CapyTransport {
 	threads(projectId: string, signal?: AbortSignal): Promise<Thread[]>;
 	thread(id: string, signal?: AbortSignal): Promise<Thread>;
 	create(projectId: string, message: string, requestId: string, signal?: AbortSignal): Promise<Thread>;
-	send(id: string, text: string, clientKey: string, signal?: AbortSignal): Promise<void>;
+	send(
+		id: string,
+		text: string,
+		clientKey: string,
+		signal?: AbortSignal,
+		delivery?: Delivery,
+	): Promise<AdmitReceipt>;
+	cancel(id: string, eventId: string, signal?: AbortSignal): Promise<{ outcome: "cancelled" | "tooLate" }>;
+	sendNow(
+		id: string,
+		eventId: string,
+		signal?: AbortSignal,
+	): Promise<{ outcome: "sent" | "tooLate"; id?: string }>;
 	rename(id: string, title: string, signal?: AbortSignal): Promise<Thread>;
 	interrupt(id: string, signal?: AbortSignal): Promise<void>;
 	watch(id: string, initial: Snapshot | undefined, signal: AbortSignal): AsyncGenerator<Snapshot>;
@@ -123,8 +135,39 @@ export class HttpTransport implements CapyTransport {
 	create(projectId: string, message: string, requestId: string, signal?: AbortSignal): Promise<Thread> {
 		return this.request("/threads", "POST", { projectId, message, requestId }, signal);
 	}
-	async send(id: string, text: string, clientKey: string, signal?: AbortSignal): Promise<void> {
-		await this.request(`/threads/${encodeURIComponent(id)}/message`, "POST", { text, clientKey }, signal);
+	send(
+		id: string,
+		text: string,
+		clientKey: string,
+		signal?: AbortSignal,
+		delivery?: Delivery,
+	): Promise<AdmitReceipt> {
+		return this.request(
+			`/threads/${encodeURIComponent(id)}/message`,
+			"POST",
+			{ text, clientKey, delivery },
+			signal,
+		);
+	}
+	cancel(id: string, eventId: string, signal?: AbortSignal): Promise<{ outcome: "cancelled" | "tooLate" }> {
+		return this.request(
+			`/threads/${encodeURIComponent(id)}/messages/${encodeURIComponent(eventId)}/cancel`,
+			"POST",
+			undefined,
+			signal,
+		);
+	}
+	sendNow(
+		id: string,
+		eventId: string,
+		signal?: AbortSignal,
+	): Promise<{ outcome: "sent" | "tooLate"; id?: string }> {
+		return this.request(
+			`/threads/${encodeURIComponent(id)}/messages/${encodeURIComponent(eventId)}/send-now`,
+			"POST",
+			undefined,
+			signal,
+		);
 	}
 	rename(id: string, title: string, signal?: AbortSignal): Promise<Thread> {
 		return this.request(`/threads/${encodeURIComponent(id)}`, "PATCH", { title }, signal);
