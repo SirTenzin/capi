@@ -1,0 +1,29 @@
+{
+  "name": "capi",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Capy's cloud agent in Pi's terminal interface",
+  "type": "module",
+  "bin": { "capi": "dist/cli.js" },
+  "engines": { "node": ">=22.19.0" },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && mkdir -p dist/ui/pi/theme && cp src/ui/pi/theme/*.json dist/ui/pi/theme/ && chmod +x dist/cli.js",
+    "start": "node dist/cli.js",
+    "dev": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src test scripts",
+    "format": "biome check --write src test scripts",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-tui": "0.85.1",
+    "chalk": "5.6.2",
+    "highlight.js": "10.7.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.8",
+    "@types/node": "22.19.19",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3"
+  }
+}
