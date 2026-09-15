@@ -1,0 +1,5 @@
+node_modules/
+dist/
+*.cast
+.capi/
+*.log
