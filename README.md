@@ -28,7 +28,7 @@ Select a project with the arrow keys and Enter. Your **first message creates a c
 | `/session` | Show cloud thread ID, title, and state. |
 | `/copy` | Request terminal clipboard copy of the last assistant message (OSC 52). |
 | `/hotkeys` | Show supported keyboard shortcuts. |
-| `/settings` | Choose Pi's built-in dark or light display theme. |
+| `/settings` | Choose Capy blue (default), or Pi's dark or light display theme. |
 | `/login` | Validate an environment key or enter a replacement stored key. |
 | `/logout` | Detach, remove the stored key and transcript cache. It cannot unset your shell's environment key. |
 | `/interrupt` | Explicitly request interruption of the attached cloud agent. |
@@ -46,11 +46,11 @@ The HTTP transport polls message pages and thread metadata every two seconds, dr
 
 Thread creation uses a persistent `requestId`; each later send uses a persistent `clientKey`. Mutating requests are not blindly retried. If delivery is uncertain, retry the **exact same text in the original project/thread** to reuse the ID, including after restarting Capi. The outbox blocks different messages until the uncertain send is resolved. Use `/resume` to inspect cloud state first. Don't remove an uncertain outbox unless you've independently confirmed delivery; doing so discards deduplication protection.
 
-The footer displays the API's `thread.usage.totalCredits`, labeled as a thread total, not local session spend, tokens, or a dollar estimate. Missing usage is shown as unavailable; cached metadata is labeled. Tool entries and call names are read-only cloud activity summaries, not local executable tool blocks. `/quit`, `/new`, logout, and terminal disconnect never interrupt or archive cloud work.
+The single-line footer reads `X credits · <thread title>` with `Capi` aligned right. Credits come from the API's `thread.usage.totalCredits`, not local session spend, tokens, or a dollar estimate. Missing, non-finite, or cached usage is shown as `— credits` until fresh metadata arrives. Narrow terminals truncate the left side while preserving the identity when it fits. Tool entries and call names are read-only cloud activity summaries, not local executable tool blocks. `/quit`, `/new`, logout, and terminal disconnect never interrupt or archive cloud work.
 
 ## UI provenance
 
-The fullscreen transcript/fixed-input-dock layout and concrete editor, user/assistant message renderers, selector, borders, palettes, and syntax highlighting are extracted from Pi rather than recreated with generic terminal primitives. The agent/session/provider portions are removed. See [UPSTREAM.md](UPSTREAM.md) and [the retained MIT notice](src/ui/pi/LICENSE) for the exact commit, source paths, and adaptations.
+The fullscreen transcript/fixed-input-dock layout and concrete editor, user/assistant message renderers, selector, borders, palettes, and syntax highlighting are extracted from Pi rather than recreated with generic terminal primitives. Capy blue adapts Pi's dark palette with bright blue accents and navy message backgrounds, without changing the message layout. Pi's original dark and light palettes remain available, and saved theme choices are preserved. The agent/session/provider portions are removed. See [UPSTREAM.md](UPSTREAM.md) and [the retained MIT notice](src/ui/pi/LICENSE) for the exact commit, source paths, and adaptations.
 
 ## Development and verification
 

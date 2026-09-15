@@ -361,7 +361,7 @@ function createTheme(themeJson: ThemeJson, mode?: ColorMode, sourcePath?: string
 }
 
 export let theme: Theme;
-export function initTheme(name: "dark" | "light" = "dark"): void {
+export function initTheme(name: "capy" | "dark" | "light" = "capy"): void {
  const json = JSON.parse(readFileSync(new URL(`./${name}.json`, import.meta.url), "utf8")) as ThemeJson;
  theme = createTheme(json);
 }

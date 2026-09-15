@@ -7,7 +7,7 @@ import type { Snapshot } from "./types.ts";
 
 export interface Settings {
 	projectId?: string;
-	theme?: "dark" | "light";
+	theme?: "capy" | "dark" | "light";
 }
 
 export class Storage {

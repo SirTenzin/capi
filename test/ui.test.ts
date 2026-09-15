@@ -1,14 +1,16 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import { commandAutocomplete, commands, parseCommand } from "../src/commands.ts";
 import { KeybindingsManager } from "../src/keybindings.ts";
 import { Footer } from "../src/ui/footer.ts";
 import { MaskedInput } from "../src/ui/masked-input.ts";
 import { AssistantMessageComponent } from "../src/ui/pi/components/assistant-message.ts";
 import { UserMessageComponent } from "../src/ui/pi/components/user-message.ts";
-import { initTheme } from "../src/ui/pi/theme/theme.ts";
+import { initTheme, theme } from "../src/ui/pi/theme/theme.ts";
 import { safeText } from "../src/ui/safe-text.ts";
+import { Splash } from "../src/ui/splash.ts";
 
 initTheme("dark");
 
@@ -73,7 +75,7 @@ test("Pi user background and assistant markdown layout are retained", () => {
 
 test("footer uses only actual cloud thread credit totals and labels missing usage", () => {
 	const footer = new Footer();
-	assert.match(safeText(footer.render(100).join("\n")), /Credits unavailable/);
+	assert.deepEqual(footer.render(40).map(safeText), [`— credits · New thread${" ".repeat(14)}Capi`]);
 	footer.thread = {
 		id: "t",
 		title: "Thread",
@@ -81,12 +83,65 @@ test("footer uses only actual cloud thread credit totals and labels missing usag
 		status: "idle",
 		usage: { totalCredits: 1.25, llmCredits: 1, imageCredits: 0, vmCredits: 0.25 },
 	};
-	assert.match(safeText(footer.render(100).join("\n")), /1.25 credits • thread total/);
-	assert.ok(!safeText(footer.render(100).join("\n")).includes("tokens"));
+	assert.deepEqual(footer.render(40).map(safeText), [`1.25 credits · Thread${" ".repeat(15)}Capi`]);
+	footer.stale = true;
+	assert.match(safeText(footer.render(40)[0]), /^— credits · Thread +Capi$/);
+	footer.stale = false;
+	for (const totalCredits of [0, Number.NaN, Number.POSITIVE_INFINITY]) {
+		footer.thread.usage = { totalCredits, llmCredits: 0, imageCredits: 0, vmCredits: 0 };
+		assert.match(safeText(footer.render(40)[0]), totalCredits === 0 ? /^0.00 credits/ : /^— credits/);
+	}
+});
+
+test("footer stays one terminal row at narrow widths and sanitizes cloud titles", () => {
+	const footer = new Footer();
+	footer.thread = {
+		id: "t",
+		title: "A\u001b]52;c;evil\u0007\u001b[2J\u001bPprivate\u001b\\\u009b31m\n\t界🙂 title",
+		projectId: "p",
+		status: "idle",
+	};
+	assert.match(safeText(footer.render(60)[0]), /^— credits · A 界🙂 title +Capi$/);
+	for (let width = 0; width <= 60; width++) {
+		const lines = footer.render(width);
+		assert.equal(lines.length, 1);
+		assert.ok(visibleWidth(lines[0]) <= width, `width ${width}`);
+		assert.ok(!/[\r\n\t]/.test(lines[0]));
+		if (width >= 4) assert.ok(safeText(lines[0]).endsWith("Capi"));
+	}
+});
+
+test("Capy blue is the default palette and dark/light remain selectable", () => {
+	initTheme();
+	assert.equal(theme.name, "capy");
+	assert.notEqual(theme.fg("accent", "x"), theme.fg("dim", "x"));
+	assert.ok(new UserMessageComponent("Blue message").render(60).join("\n").includes("48;"));
+	for (const name of ["dark", "light", "capy"] as const) {
+		initTheme(name);
+		assert.equal(theme.name, name);
+		assert.match(safeText(new Footer().render(40)[0]), /Capi$/);
+	}
 });
 
 test("terminal escape sequences from cloud messages cannot control the terminal", () => {
 	assert.equal(safeText("Hello\u001b]52;c;evil\u0007\u001b[2Jworld"), "Helloworld");
+	assert.equal(safeText("A\u001b]8;;url\u001b\\link\u001b]8;;\u001b\\B"), "AlinkB");
+	assert.equal(safeText("A\u009d52;c;evil\u009cB\u001b]unterminated"), "AB");
+});
+
+test("splash centers the logo at normal widths and fits narrow terminals", () => {
+	const splash = new Splash();
+	const normal = splash.render(80).map(safeText);
+	assert.ok(normal.some((line) => /[⣿⣴⣀]/u.test(line)));
+	assert.ok(normal.includes(`${" ".repeat(38)}capi`));
+	for (const width of [0, 1, 4, 20, 33, 34, 60, 80, 120]) {
+		const lines = splash.render(width);
+		assert.ok(
+			lines.every((line) => visibleWidth(line) <= width),
+			`width ${width}`,
+		);
+		if (width < 34) assert.ok(!lines.some((line) => /[⣿⣴⣀]/u.test(line)));
+	}
 });
 
 test("runtime dependencies contain Pi TUI, never a Pi agent or provider shim", async () => {

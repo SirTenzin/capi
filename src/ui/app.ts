@@ -5,7 +5,6 @@ import {
 	matchesKey,
 	type OverlayHandle,
 	ProcessTerminal,
-	Spacer,
 	Text,
 	TuiAltScreen,
 } from "@earendil-works/pi-tui";
@@ -26,6 +25,7 @@ import { SelectorComponent } from "./pi/components/selector.ts";
 import { UserMessageComponent } from "./pi/components/user-message.ts";
 import { getEditorTheme, initTheme, theme } from "./pi/theme/theme.ts";
 import { safeText } from "./safe-text.ts";
+import { Splash } from "./splash.ts";
 import { StatusIndicator } from "./status-indicator.ts";
 
 export class App {
@@ -51,7 +51,9 @@ export class App {
 			if (name.startsWith("PI_")) delete process.env[name];
 		}
 		this.settings = (await this.storage.read<Settings>("settings.json")) ?? {};
-		initTheme(this.settings.theme === "light" ? "light" : "dark");
+		initTheme(
+			this.settings.theme === "light" || this.settings.theme === "dark" ? this.settings.theme : "capy",
+		);
 		this.tui = new TuiAltScreen(new ProcessTerminal(), true, `${this.storage.root}/logs`, {
 			searchMatchStyle: (text) =>
 				theme.underline(theme.bg("searchMatchBg", theme.fg("searchMatchText", text))),
@@ -114,20 +116,7 @@ export class App {
 
 	private welcome(): void {
 		this.document.clear();
-		this.document.addChild(
-			new Text(theme.bold(theme.fg("accent", "capi")) + theme.fg("dim", " v0.1.0"), 1, 1),
-		);
-		this.document.addChild(
-			new Text(
-				theme.fg(
-					"muted",
-					"Capy cloud agent • Pi terminal interface\n\n/new start a thread    /resume return to a thread\n/hotkeys shortcuts     /quit detach\n\nYour agent runs in Capy. Nothing runs in this local directory.",
-				),
-				1,
-				0,
-			),
-		);
-		this.document.addChild(new Spacer(1));
+		this.document.addChild(new Splash());
 		this.transcriptKey = "";
 	}
 
@@ -150,7 +139,6 @@ export class App {
 		this.session = undefined;
 		this.stopIndicator();
 		this.footer.thread = undefined;
-		this.footer.project = undefined;
 		this.welcome();
 		await this.guarded(async () => {
 			let key = manual && !process.env.CAPY_API_KEY?.trim() ? undefined : await this.storage.key();
@@ -198,7 +186,6 @@ export class App {
 		this.session.newThread(chosen);
 		this.settings.projectId = chosen.id;
 		await this.storage.write("settings.json", this.settings);
-		this.footer.project = chosen;
 		this.footer.thread = undefined;
 		this.stopIndicator();
 		this.pending.setText("");
@@ -209,7 +196,6 @@ export class App {
 	private renderSnapshot(snapshot: Snapshot, cached: boolean): void {
 		if (this.ended) return;
 		this.footer.thread = snapshot.thread;
-		this.footer.project = this.session?.project;
 		this.footer.stale = cached;
 		const key = JSON.stringify(snapshot.messages);
 		if (key !== this.transcriptKey) {
@@ -304,7 +290,6 @@ export class App {
 				this.stopIndicator();
 				await this.storage.logout();
 				this.welcome();
-				this.footer.project = undefined;
 				this.footer.thread = undefined;
 				this.notice(
 					process.env.CAPY_API_KEY
@@ -367,6 +352,7 @@ export class App {
 				break;
 			case "settings": {
 				const selected = await this.select("Display settings • theme", [
+					{ label: "Capy blue", value: "capy" as const },
 					{ label: "Dark", value: "dark" as const },
 					{ label: "Light", value: "light" as const },
 				]);

@@ -20,14 +20,17 @@ Paths below are relative to upstream `packages/coding-agent/src/`.
 | `modes/interactive/components/extension-selector.ts` | `src/ui/pi/components/selector.ts` | Retained selector layout, arrows/colors/navigation/borders; removed extension tool/timeout hooks; bounded visible rows for long cloud lists. Renamed for standalone use. |
 | `modes/interactive/components/dynamic-border.ts` | `src/ui/pi/components/dynamic-border.ts` | Retained. |
 | `modes/interactive/components/status-indicator.ts` | `src/ui/status-indicator.ts` | Retained loader and in-border rendering; cloud status only, no compaction/retry/branch-summary extension options. |
-| `modes/interactive/components/footer.ts` | `src/ui/footer.ts` | Adapted two-line truncated location/stats/right-aligned identity pattern; cloud project/thread and honest API credit totals replace cwd/git/model/tokens/context/runtime inputs. |
+| `modes/interactive/components/footer.ts` | `src/ui/footer.ts` | Adapted truncation/right-aligned identity into one row: API credits, sanitized thread title, and Capi. Missing or cached usage is a dash; project and thread-total suffix are omitted. |
 | `modes/interactive/theme/theme.ts` | `src/ui/pi/theme/theme.ts` | Retained colors, conversion, Theme renderer, Markdown/editor/select/settings themes; removed custom theme loading, extension registration, watchers, thinking/bash controls, and export helpers. Built-in palettes only. |
 | `modes/interactive/theme/{dark,light}.json` | `src/ui/pi/theme/` | Unchanged upstream palettes. Unused palette keys are inert data. |
+| `modes/interactive/theme/dark.json` | `src/ui/pi/theme/capy.json` | Capi's default Capy blue palette: bright blue accents, navy message/selection backgrounds, and cool text colors. Theme selection retains the original dark/light choices. |
 | `utils/{syntax-highlight,html}.ts` and `utils/highlight-js.d.ts` | `src/ui/pi/utils/` | Retained syntax highlighting and declarations. |
 
 The renderer composition in `src/ui/app.ts` also retains the fullscreen search styling and jump-to-latest treatment from upstream `modes/interactive/tui-renderer.ts`. These extracted/adapted files remain covered by Pi's MIT license. Original Capi transport/controller/storage/auth code is separate.
 
 Upstream instruction files, local agent orchestration, session managers, resource/context loaders, tool implementations, shell execution, extensions, and provider integrations were deliberately not copied.
+
+The centered splash in `src/ui/splash.ts` is Capi-specific. Its monochrome logo is sampled into 30-column Unicode Braille from Capy's 64×64 favicon at https://capy.ai/favicon.png, retrieved September 15, 2026; it is not Pi artwork.
 
 ## API provenance
 
