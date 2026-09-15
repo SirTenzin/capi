@@ -24,6 +24,9 @@ class FakeTransport implements CapyTransport {
 	async threads() {
 		return [this.value];
 	}
+	async tasks() {
+		return [];
+	}
 	async thread() {
 		return this.value;
 	}

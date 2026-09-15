@@ -17,6 +17,7 @@ import { HttpTransport } from "../transport.ts";
 import type { Delivery, Project, Snapshot } from "../types.ts";
 import { Footer } from "./footer.ts";
 import { MaskedInput } from "./masked-input.ts";
+import { ModelTasks } from "./model-tasks.ts";
 import { createChatViewport } from "./pi/chat-viewport.ts";
 import { AssistantMessageComponent } from "./pi/components/assistant-message.ts";
 import { CustomEditor } from "./pi/components/custom-editor.ts";
@@ -33,6 +34,8 @@ export class App {
 	private settings: Settings = {};
 	private tui!: TuiAltScreen;
 	private editor!: CustomEditor;
+	private readonly editorContainer = new Container();
+	private readonly modelTasks = new ModelTasks();
 	private readonly document = new Container();
 	private readonly notices = new Text("", 1, 0);
 	private readonly pending = new Text("", 1, 0);
@@ -45,6 +48,7 @@ export class App {
 	private overlay?: OverlayHandle;
 	private cancelOverlay?: () => void;
 	private transcriptKey = "";
+	private refreshTasksPicker?: () => void;
 
 	async start(): Promise<void> {
 		for (const name of Object.keys(process.env)) {
@@ -77,11 +81,13 @@ export class App {
 		this.editor.onQueue = (text) => {
 			void this.submit(text, "queue");
 		};
+		this.editorContainer.addChild(this.editor);
 		const viewport = createChatViewport({
 			document: this.document,
 			pendingMessages: this.pending,
 			status: this.notices,
-			editor: this.editor,
+			widgetsAbove: this.modelTasks,
+			editor: this.editorContainer,
 			footer: this.footer,
 			scrollbarTrackStyle: (text) => theme.fg("scrollbarTrack", text),
 			scrollbarThumbStyle: (text) => theme.fg("scrollbarThumb", text),
@@ -120,7 +126,7 @@ export class App {
 			new Splash(
 				(width) =>
 					this.tui.terminal.rows -
-					[this.pending, this.notices, this.editor, this.footer].reduce(
+					[this.pending, this.notices, this.modelTasks, this.editorContainer, this.footer].reduce(
 						(rows, component) => rows + component.render(width).length,
 						0,
 					),
@@ -148,6 +154,8 @@ export class App {
 		this.session = undefined;
 		this.stopIndicator();
 		this.footer.thread = undefined;
+		this.modelTasks.thread = undefined;
+		this.modelTasks.tasks = { stale: false };
 		this.welcome();
 		await this.guarded(async () => {
 			let key = manual && !process.env.CAPY_API_KEY?.trim() ? undefined : await this.storage.key();
@@ -168,6 +176,11 @@ export class App {
 			this.projects = projects;
 			this.session = new Session(transport, this.storage);
 			this.session.onSnapshot = (snapshot, cached) => this.renderSnapshot(snapshot, cached);
+			this.session.onTasks = (state) => {
+				this.modelTasks.tasks = state;
+				this.refreshTasksPicker?.();
+				this.tui.requestRender();
+			};
 			this.session.onStatus = (text) => {
 				this.footer.stale = true;
 				this.notice(text);
@@ -196,6 +209,7 @@ export class App {
 		this.settings.projectId = chosen.id;
 		await this.storage.write("settings.json", this.settings);
 		this.footer.thread = undefined;
+		this.modelTasks.thread = undefined;
 		this.stopIndicator();
 		this.pending.setText("");
 		this.welcome();
@@ -208,6 +222,7 @@ export class App {
 	private renderSnapshot(snapshot: Snapshot, cached: boolean): void {
 		if (this.ended) return;
 		this.footer.thread = snapshot.thread;
+		this.modelTasks.thread = snapshot.thread;
 		this.footer.stale = cached;
 		const key = JSON.stringify(snapshot.messages);
 		if (key !== this.transcriptKey) {
@@ -290,6 +305,11 @@ export class App {
 
 	private async command(name: string, argument: string): Promise<void> {
 		switch (name) {
+			case "tasks": {
+				if (!this.session?.snapshot) throw new Error("No cloud thread is attached.");
+				await this.showTasks();
+				break;
+			}
 			case "queue": {
 				if (!this.session) throw new Error("Use /login first.");
 				const { outbox, messages } = await this.session.tracked();
@@ -332,6 +352,8 @@ export class App {
 				await this.storage.logout();
 				this.welcome();
 				this.footer.thread = undefined;
+				this.modelTasks.thread = undefined;
+				this.modelTasks.tasks = { stale: false };
 				this.notice(
 					process.env.CAPY_API_KEY
 						? "Stored key and cache removed. CAPY_API_KEY is still set in your shell; unset it before restarting to fully log out."
@@ -440,6 +462,41 @@ export class App {
 				() => finish(),
 			);
 			this.mountOverlay(selector, () => finish());
+		});
+	}
+
+	private showTasks(): Promise<void> {
+		return new Promise((resolve) => {
+			const finish = () => {
+				this.refreshTasksPicker = undefined;
+				this.cancelOverlay = undefined;
+				this.editorContainer.clear();
+				this.editorContainer.addChild(this.editor);
+				if (!this.ended) this.tui.setFocus(this.editor);
+				this.tui.requestRender();
+				resolve();
+			};
+			const selector = new SelectorComponent("Cloud tasks", [], finish, finish);
+			this.refreshTasksPicker = () => {
+				const { items, stale } = this.session?.tasks ?? { stale: false };
+				selector.setOptions(
+					`Cloud tasks${stale ? " • stale / unavailable" : ""}`,
+					items?.length
+						? items.map((task) =>
+								safeText(`${task.taskPath} · ${task.title ?? "Untitled"} · ${task.status}`).replace(
+									/\s+/g,
+									" ",
+								),
+							)
+						: [items ? "No tasks" : stale ? "Task list unavailable" : "Loading tasks…"],
+				);
+			};
+			this.refreshTasksPicker();
+			this.cancelOverlay = finish;
+			this.editorContainer.clear();
+			this.editorContainer.addChild(selector);
+			this.tui.setFocus(selector);
+			this.tui.requestRender();
 		});
 	}
 

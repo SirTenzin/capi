@@ -1,4 +1,4 @@
-import type { AdmitReceipt, Delivery, Message, Page, Project, Snapshot, Thread } from "./types.ts";
+import type { AdmitReceipt, Delivery, Message, Page, Project, Snapshot, Task, Thread } from "./types.ts";
 
 export class ApiError extends Error {
 	constructor(
@@ -42,6 +42,7 @@ export interface CapyTransport {
 	projects(signal?: AbortSignal): Promise<Project[]>;
 	threads(projectId: string, signal?: AbortSignal): Promise<Thread[]>;
 	thread(id: string, signal?: AbortSignal): Promise<Thread>;
+	tasks(id: string, signal?: AbortSignal): Promise<Task[]>;
 	create(projectId: string, message: string, requestId: string, signal?: AbortSignal): Promise<Thread>;
 	send(
 		id: string,
@@ -131,6 +132,28 @@ export class HttpTransport implements CapyTransport {
 	}
 	thread(id: string, signal?: AbortSignal): Promise<Thread> {
 		return this.request(`/threads/${encodeURIComponent(id)}`, "GET", undefined, signal);
+	}
+	async tasks(id: string, signal?: AbortSignal): Promise<Task[]> {
+		const items = new Map<string, Task>();
+		const seen = new Set<string>();
+		let cursor: string | null = null;
+		do {
+			const query = new URLSearchParams({ limit: "100" });
+			if (cursor) query.set("after", cursor);
+			const page: Page<Task> = await this.request(
+				`/threads/${encodeURIComponent(id)}/tasks?${query}`,
+				"GET",
+				undefined,
+				signal,
+			);
+			for (const task of page.items) items.set(task.id, task);
+			cursor = page.cursor;
+			if (cursor && seen.has(cursor)) throw new Error("Capy repeated a task cursor.");
+			if (cursor) seen.add(cursor);
+		} while (cursor);
+		return [...items.values()].sort((a, b) =>
+			a.taskPath.localeCompare(b.taskPath, undefined, { numeric: true }),
+		);
 	}
 	create(projectId: string, message: string, requestId: string, signal?: AbortSignal): Promise<Thread> {
 		return this.request("/threads", "POST", { projectId, message, requestId }, signal);

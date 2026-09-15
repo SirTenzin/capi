@@ -5,6 +5,7 @@ export const commands = [
 	["resume", "Resume a cloud thread"],
 	["name", "Rename the current thread"],
 	["session", "Show cloud thread details"],
+	["tasks", "List tasks in the attached cloud thread"],
 	["copy", "Copy the latest assistant response"],
 	["hotkeys", "Show keyboard shortcuts"],
 	["quit", "Detach; leave Capy running"],

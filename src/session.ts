@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Storage } from "./storage.ts";
 import { ApiError, type CapyTransport, delay } from "./transport.ts";
-import type { Delivery, PendingMessage, Project, Snapshot, Thread } from "./types.ts";
+import type { Delivery, PendingMessage, Project, Snapshot, TaskState, Thread } from "./types.ts";
 
 export interface Outbox {
 	projectId: string;
@@ -14,6 +14,8 @@ export interface Outbox {
 export class Session {
 	project?: Project;
 	snapshot?: Snapshot;
+	tasks: TaskState = { stale: false };
+	onTasks: (state: TaskState) => void = () => {};
 	private polling?: AbortController;
 	private generation = 0;
 	private closed = false;
@@ -44,6 +46,8 @@ export class Session {
 		this.detach();
 		this.project = project;
 		this.snapshot = undefined;
+		this.tasks = { stale: false };
+		this.onTasks(this.tasks);
 	}
 
 	private exclusive<T>(work: () => Promise<T>): Promise<T> {
@@ -160,6 +164,8 @@ export class Session {
 			throw new Error("This thread belongs to a different project. Select its project with /new first.");
 		this.detach();
 		const cached = await this.storage.cached(id);
+		this.tasks = { stale: false };
+		this.onTasks(this.tasks);
 		this.snapshot = { thread, messages: cached?.messages ?? [], cursor: cached?.cursor ?? null };
 		if (this.closed) return;
 		this.onSnapshot(this.snapshot, true);
@@ -188,6 +194,26 @@ export class Session {
 		const generation = this.generation;
 		const id = this.snapshot.thread.id;
 		void this.poll(id, controller.signal, generation);
+		void this.pollTasks(id, controller.signal, generation);
+	}
+
+	private async pollTasks(id: string, signal: AbortSignal, generation: number): Promise<void> {
+		while (!signal.aborted) {
+			let next: TaskState;
+			try {
+				next = { items: await this.transport.tasks(id, signal), stale: false };
+			} catch {
+				next = { ...this.tasks, stale: true };
+			}
+			if (signal.aborted || generation !== this.generation) return;
+			this.tasks = next;
+			this.onTasks(next);
+			try {
+				await delay(2000, signal);
+			} catch {
+				return;
+			}
+		}
 	}
 
 	private async poll(id: string, signal: AbortSignal, generation: number): Promise<void> {

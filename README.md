@@ -26,6 +26,7 @@ Select a project with the arrow keys and Enter. Your **first message creates a c
 | `/resume [threadId]` | Pick a cloud thread, or resume a known ID in the selected project. |
 | `/name [title]` | Rename the attached cloud thread. |
 | `/session` | Show cloud thread ID, title, and state. |
+| `/tasks` | List the attached thread's tasks in an inline picker; Enter or Escape returns to the editor. |
 | `/copy` | Request terminal clipboard copy of the last assistant message (OSC 52). |
 | `/hotkeys` | Show supported keyboard shortcuts. |
 | `/settings` | Choose Capy blue (default), or Pi's dark or light display theme. |

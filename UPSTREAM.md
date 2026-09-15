@@ -34,4 +34,4 @@ The centered splash in `src/ui/splash.ts` is Capi-specific. Its monochrome logo 
 
 ## API provenance
 
-Implementation follows the public OpenAPI schema fetched from https://docs.capy.ai/openapi.json on September 15, 2026, with API origin https://api.capy.ai. Capi uses projects, threads, messages, rename, and interrupt endpoints. Polling is contained in `src/transport.ts`, so replacing it with a future stream does not require changing the presentation or loading a Pi agent runtime.
+Implementation follows the public OpenAPI schema fetched from https://docs.capy.ai/openapi.json on September 15, 2026, with API origin https://api.capy.ai. Capi uses projects, threads, messages, tasks, rename, and interrupt endpoints. API requests and pagination are contained in `src/transport.ts`; `src/session.ts` independently polls tasks so their availability does not block message sync. The model/task row uses the thread's nullable `lastModelId` and task status values from that schema. The task picker reuses the extracted selector in place of the editor, following upstream interactive mode's `showSelector`/`showModelSelector` composition.

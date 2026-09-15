@@ -67,6 +67,13 @@ export class SelectorComponent extends Container {
 		}
 	}
 
+	setOptions(title: string, options: string[]): void {
+		this.options = options;
+		this.selectedIndex = Math.max(0, Math.min(this.selectedIndex, options.length - 1));
+		this.titleText.setText(theme.fg("accent", theme.bold(title)));
+		this.updateList();
+	}
+
 	handleInput(keyData: string): void {
 		const kb = getKeybindings();
 		if (kb.matches(keyData, "tui.select.up") || keyData === "k") {

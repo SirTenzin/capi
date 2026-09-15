@@ -8,12 +8,27 @@ export interface Thread {
 	projectId: string | null;
 	title: string | null;
 	status: string;
+	lastModelId?: string | null;
 	usage?: {
 		totalCredits: number | string;
 		llmCredits: number | string;
 		vmCredits: number | string;
 		imageCredits: number | string;
 	};
+}
+
+export interface Task {
+	id: string;
+	threadId: string;
+	parentId: string;
+	taskPath: string;
+	title: string | null;
+	status: "working" | "waiting" | "idle" | "done" | "failed";
+}
+
+export interface TaskState {
+	items?: Task[];
+	stale: boolean;
 }
 
 export interface Message {
