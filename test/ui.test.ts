@@ -130,10 +130,23 @@ test("terminal escape sequences from cloud messages cannot control the terminal"
 });
 
 test("splash centers the logo at normal widths and fits narrow terminals", () => {
-	const splash = new Splash();
+	const splash = new Splash(() => 31);
 	const normal = splash.render(80).map(safeText);
 	assert.ok(normal.some((line) => /[⣿⣴⣀]/u.test(line)));
-	assert.ok(normal.includes(`${" ".repeat(38)}capi`));
+	assert.equal(normal.length, 31);
+	assert.equal(
+		normal.findIndex((line) => line.trim()),
+		9,
+	);
+	assert.equal(
+		normal.findLastIndex((line) => line.trim()),
+		21,
+	);
+	assert.ok(!normal.some((line) => /capi|cloud agent/i.test(line)));
+	const art = normal.filter((line) => line.trim());
+	const left = Math.min(...art.map((line) => line.search(/[^ ⠀]/u)));
+	const right = 80 - Math.max(...art.map(visibleWidth));
+	assert.ok(Math.abs(left - right) <= 1);
 	for (const width of [0, 1, 4, 20, 33, 34, 60, 80, 120]) {
 		const lines = splash.render(width);
 		assert.ok(

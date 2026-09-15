@@ -113,7 +113,16 @@ export class App {
 
 	private welcome(): void {
 		this.document.clear();
-		this.document.addChild(new Splash());
+		this.document.addChild(
+			new Splash(
+				(width) =>
+					this.tui.terminal.rows -
+					[this.pending, this.notices, this.editor, this.footer].reduce(
+						(rows, component) => rows + component.render(width).length,
+						0,
+					),
+			),
+		);
 		this.transcriptKey = "";
 	}
 
