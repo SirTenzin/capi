@@ -31,7 +31,6 @@ export class Splash implements Component {
 		}
 		lines.push(center(theme.bold(theme.fg("accent", "capi"))));
 		lines.push(center(theme.fg("muted", "Your cloud agent. At home in the terminal.")), "");
-		lines.push(center(theme.fg("dim", "/new   /resume   /hotkeys")), "");
 		return lines;
 	}
 }

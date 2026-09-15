@@ -71,9 +71,6 @@ export class App {
 		});
 		this.editor.setAutocompleteProvider(commandAutocomplete);
 		this.editor.onCtrlD = () => this.quit();
-		this.editor.onEscape = () => {
-			this.notice("Escape does not stop Capy. Use /interrupt explicitly; /quit detaches.");
-		};
 		this.editor.onSubmit = (text) => {
 			void this.submit(text);
 		};
@@ -167,7 +164,7 @@ export class App {
 				this.notice("Authenticated, but no projects are accessible. Create a project in Capy, then /login.");
 				return;
 			}
-			this.notice("Authenticated • select a project to continue.");
+			this.notice("");
 			await this.newThread();
 		});
 	}
@@ -190,7 +187,7 @@ export class App {
 		this.stopIndicator();
 		this.pending.setText("");
 		this.welcome();
-		this.notice("Ready • the first message creates a cloud thread. /quit always detaches.");
+		this.notice("");
 	}
 
 	private renderSnapshot(snapshot: Snapshot, cached: boolean): void {
@@ -233,9 +230,7 @@ export class App {
 			this.editor.setWorkingStatusIndicator(this.indicator);
 		}
 		if (!cached) this.pending.setText("");
-		this.notice(
-			`${snapshot.thread.status}${cached ? " • cached transcript; syncing…" : " • synced"}   /interrupt stop agent   /quit detach`,
-		);
+		this.notice(`${snapshot.thread.status}${cached ? " • syncing…" : ""}`);
 	}
 
 	private stopIndicator(): void {
@@ -253,7 +248,7 @@ export class App {
 		}
 		if (this.busy) {
 			this.editor.setText(raw);
-			this.notice("Please wait for the current request to finish. /quit detaches.");
+			this.notice("Request in progress…");
 			return;
 		}
 		this.busy = true;
@@ -307,7 +302,7 @@ export class App {
 					this.notice("Loading cloud threads…");
 					const threads = await this.session.transport.threads(this.session.project.id);
 					if (!threads.length) {
-						this.notice("No cloud threads yet. Send a message to create one.");
+						this.notice("No cloud threads yet.");
 						return;
 					}
 					id =
