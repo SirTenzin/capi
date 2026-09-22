@@ -1,0 +1,8 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.8/schema.json",
+  "files": { "includes": ["**", "!src/ui/pi/**"] },
+  "formatter": { "indentStyle": "tab", "lineWidth": 110 },
+  "linter": { "enabled": true, "rules": { "recommended": true } },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "overrides": [{ "includes": ["src/ui/safe-text.ts"], "linter": { "rules": { "suspicious": { "noControlCharactersInRegex": "off" } } } }]
+}
